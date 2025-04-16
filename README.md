@@ -151,5 +151,3 @@ This README.md:
 4. Maintains consistent structure
 5. Provides troubleshooting tips
 6. Is properly spaced for readability
-
-You can copy this directly into a README.md file in your project root.
