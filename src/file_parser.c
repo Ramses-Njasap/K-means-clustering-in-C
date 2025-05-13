@@ -114,12 +114,70 @@ void analyze_metadata(Metadata *metadata, char **preprocess_method, int *target_
     // Decision rules
     if (range <= 3 && similar_pct > 0.7 && dominant_pct > 0.3 && !sequence_like && metadata->total_vectors > 50) {
         *preprocess_method = strdup("pad_zeros");
-        *target_dim = metadata->max_dim; // Pad to max (e.g., 5D)
+        *target_dim = metadata->max_dim; // Pad to max (e.g., 7D)
     } else if (range > 3 || metadata->length_counts[metadata->max_dim] < 0.05 * metadata->total_vectors || sequence_like) {
         *preprocess_method = strdup("reduce_dims");
-        *target_dim = 2; // Reduce to [mean, sum]
+        *target_dim = (dominant_dim >= 2) ? dominant_dim : 2; // Dynamic: dominant_dim, min 2D
     } else {
         *preprocess_method = strdup("hybrid");
-        *target_dim = dominant_dim; // Pad to dominant (e.g., 3D or 4D)
+        *target_dim = dominant_dim; // Hybrid: dominant_dim (e.g., 2D or 3D)
     }
+}
+
+Vector *preprocess_vectors(Vector *vectors, int num_vectors, const char *method, int target_dim) {
+    Vector *new_vectors = malloc(num_vectors * sizeof(Vector));
+    if (!new_vectors) {
+        printf("Memory allocation failed\n");
+        return NULL;
+    }
+
+    for (int i = 0; i < num_vectors; i++) {
+        new_vectors[i].length = target_dim;
+        new_vectors[i].values = malloc(target_dim * sizeof(float));
+        if (!new_vectors[i].values) {
+            printf("Memory allocation failed\n");
+            for (int j = 0; j < i; j++) free(new_vectors[j].values);
+            free(new_vectors);
+            return NULL;
+        }
+
+        if (strcmp(method, "reduce_dims") == 0) {
+            // Compute statistics for reduction
+            float sum = 0.0, sum_sq = 0.0, max_val = -1e9;
+            for (int j = 0; j < vectors[i].length; j++) {
+                sum += vectors[i].values[j];
+                sum_sq += vectors[i].values[j] * vectors[i].values[j];
+                if (vectors[i].values[j] > max_val) max_val = vectors[i].values[j];
+            }
+            float mean = sum / vectors[i].length;
+            float variance = (sum_sq / vectors[i].length) - (mean * mean);
+
+            // Assign features based on target_dim
+            if (target_dim >= 1) new_vectors[i].values[0] = mean;
+            if (target_dim >= 2) new_vectors[i].values[1] = sum;
+            if (target_dim >= 3) new_vectors[i].values[2] = variance;
+            if (target_dim >= 4) new_vectors[i].values[3] = max_val;
+            for (int j = 4; j < target_dim; j++) new_vectors[i].values[j] = 0.0; // Pad rest
+        } else if (strcmp(method, "pad_zeros") == 0) {
+            // Pad with zeros to target_dim
+            for (int j = 0; j < target_dim; j++) {
+                new_vectors[i].values[j] = (j < vectors[i].length) ? vectors[i].values[j] : 0.0;
+            }
+        } else if (strcmp(method, "hybrid") == 0) {
+            // Hybrid: Reduce if longer, pad if shorter
+            if (vectors[i].length >= target_dim) {
+                // Reduce: Take first target_dim values
+                for (int j = 0; j < target_dim; j++) {
+                    new_vectors[i].values[j] = vectors[i].values[j];
+                }
+            } else {
+                // Pad: Copy values, then pad with zeros
+                for (int j = 0; j < target_dim; j++) {
+                    new_vectors[i].values[j] = (j < vectors[i].length) ? vectors[i].values[j] : 0.0;
+                }
+            }
+        }
+    }
+
+    return new_vectors;
 }

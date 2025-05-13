@@ -30,8 +30,30 @@ int main() {
     printf("Recommended preprocessing: %s\n", preprocess_method);
     printf("Target dimension: %d\n", target_dim);
 
+    // Preprocess vectors
+    Vector *processed_vectors = preprocess_vectors(vectors, num_vectors, preprocess_method, target_dim);
+    if (!processed_vectors) {
+        printf("Preprocessing failed\n");
+        free_vectors(vectors, num_vectors);
+        free_metadata(&metadata);
+        free(preprocess_method);
+        return 1;
+    }
+
+    // Print sample of preprocessed vectors (first 5)
+    printf("\nSample preprocessed vectors (first 5):\n");
+    for (int i = 0; i < num_vectors && i < 5; i++) {
+        printf("Vector %d: [", i + 1);
+        for (int j = 0; j < processed_vectors[i].length; j++) {
+            printf("%.2f", processed_vectors[i].values[j]);
+            if (j < processed_vectors[i].length - 1) printf(", ");
+        }
+        printf("]\n");
+    }
+
     // Cleanup
     free_vectors(vectors, num_vectors);
+    free_vectors(processed_vectors, num_vectors);
     free_metadata(&metadata);
     free(preprocess_method);
 
