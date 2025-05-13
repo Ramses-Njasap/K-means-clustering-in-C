@@ -185,7 +185,45 @@ Vector *preprocess_vectors(Vector *vectors, int num_vectors, const char *method,
     return new_vectors;
 }
 
-void perform_kmeans(Vector *vectors, int num_vectors, int target_dim, int k, int *cluster_assignments, float **centroids) {
+void normalize_vectors(Vector *vectors, int num_vectors, int target_dim) {
+    // Compute mean and standard deviation for each dimension
+    float *means = calloc(target_dim, sizeof(float));
+    float *stddevs = calloc(target_dim, sizeof(float));
+
+    // Compute means
+    for (int i = 0; i < num_vectors; i++) {
+        for (int d = 0; d < target_dim; d++) {
+            means[d] += vectors[i].values[d];
+        }
+    }
+    for (int d = 0; d < target_dim; d++) {
+        means[d] /= num_vectors;
+    }
+
+    // Compute standard deviations
+    for (int i = 0; i < num_vectors; i++) {
+        for (int d = 0; d < target_dim; d++) {
+            float diff = vectors[i].values[d] - means[d];
+            stddevs[d] += diff * diff;
+        }
+    }
+    for (int d = 0; d < target_dim; d++) {
+        stddevs[d] = sqrt(stddevs[d] / num_vectors);
+        if (stddevs[d] == 0) stddevs[d] = 1.0; // Avoid division by zero
+    }
+
+    // Standardize: (x - mean) / stddev
+    for (int i = 0; i < num_vectors; i++) {
+        for (int d = 0; d < target_dim; d++) {
+            vectors[i].values[d] = (vectors[i].values[d] - means[d]) / stddevs[d];
+        }
+    }
+
+    free(means);
+    free(stddevs);
+}
+
+void perform_kmeans(Vector *vectors, int num_vectors, int target_dim, int k, int *cluster_assignments, float **centroids, float *wcss) {
     // Initialize centroids with random vectors
     int *used_indices = malloc(num_vectors * sizeof(int));
     for (int i = 0; i < num_vectors; i++) used_indices[i] = 0;
@@ -266,6 +304,18 @@ void perform_kmeans(Vector *vectors, int num_vectors, int target_dim, int k, int
 
         iterations++;
     } while (total_change > threshold && iterations < max_iterations);
+
+    // Compute WCSS
+    *wcss = 0.0;
+    for (int i = 0; i < num_vectors; i++) {
+        int cluster = cluster_assignments[i];
+        float distance = 0;
+        for (int d = 0; d < target_dim; d++) {
+            float diff = vectors[i].values[d] - centroids[cluster][d];
+            distance += diff * diff;
+        }
+        *wcss += distance;
+    }
 
     printf("K-means converged after %d iterations\n", iterations);
 }
