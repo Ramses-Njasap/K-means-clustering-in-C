@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "file_parser.h"
 
 int main() {
@@ -51,9 +52,49 @@ int main() {
         printf("]\n");
     }
 
+    // Perform k-means clustering (start with k = 2)
+    int k = 2;
+    int *cluster_assignments = malloc(num_vectors * sizeof(int));
+    float **centroids = malloc(k * sizeof(float *));
+    for (int i = 0; i < k; i++) centroids[i] = malloc(target_dim * sizeof(float));
+    if (!cluster_assignments || !centroids) {
+        printf("Memory allocation failed for clustering\n");
+        free(cluster_assignments);
+        for (int i = 0; i < k; i++) free(centroids[i]);
+        free(centroids);
+        free_vectors(processed_vectors, num_vectors);
+        free_vectors(vectors, num_vectors);
+        free_metadata(&metadata);
+        free(preprocess_method);
+        return 1;
+    }
+
+    srand(time(NULL)); // Seed for random initialization
+    perform_kmeans(processed_vectors, num_vectors, target_dim, k, cluster_assignments, centroids);
+
+    // Print cluster assignments (first 5)
+    printf("\nCluster assignments (first 5 vectors):\n");
+    for (int i = 0; i < num_vectors && i < 5; i++) {
+        printf("Vector %d: Cluster %d\n", i + 1, cluster_assignments[i]);
+    }
+
+    // Print centroids
+    printf("\nFinal centroids:\n");
+    for (int i = 0; i < k; i++) {
+        printf("Centroid %d: [", i);
+        for (int j = 0; j < target_dim; j++) {
+            printf("%.2f", centroids[i][j]);
+            if (j < target_dim - 1) printf(", ");
+        }
+        printf("]\n");
+    }
+
     // Cleanup
-    free_vectors(vectors, num_vectors);
+    free(cluster_assignments);
+    for (int i = 0; i < k; i++) free(centroids[i]);
+    free(centroids);
     free_vectors(processed_vectors, num_vectors);
+    free_vectors(vectors, num_vectors);
     free_metadata(&metadata);
     free(preprocess_method);
 

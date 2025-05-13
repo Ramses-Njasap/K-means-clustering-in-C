@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "file_parser.h"
 
 #define MAX_LINE 1024 // Max line length
 #define MAX_DIM 100   // Max vector dimension
+#define MAX_ITERATIONS 100 // Maximum iterations for k-means
+#define CONVERGENCE_THRESHOLD 0.0001 // Threshold for centroid change
 
 Vector *read_vectors(const char *filename, int *num_vectors, Metadata *metadata) {
     FILE *file = fopen(filename, "r");
@@ -180,4 +183,89 @@ Vector *preprocess_vectors(Vector *vectors, int num_vectors, const char *method,
     }
 
     return new_vectors;
+}
+
+void perform_kmeans(Vector *vectors, int num_vectors, int target_dim, int k, int *cluster_assignments, float **centroids) {
+    // Initialize centroids with random vectors
+    int *used_indices = malloc(num_vectors * sizeof(int));
+    for (int i = 0; i < num_vectors; i++) used_indices[i] = 0;
+    for (int i = 0; i < k; i++) {
+        int idx;
+        do {
+            idx = rand() % num_vectors;
+        } while (used_indices[idx]);
+        used_indices[idx] = 1;
+        for (int j = 0; j < target_dim; j++) {
+            centroids[i][j] = vectors[idx].values[j];
+        }
+    }
+    free(used_indices);
+
+    int max_iterations = MAX_ITERATIONS;
+    float threshold = CONVERGENCE_THRESHOLD;
+    int iterations = 0;
+    float total_change;
+
+    do {
+        // Assign vectors to nearest centroid
+        for (int i = 0; i < num_vectors; i++) {
+            float min_distance = -1;
+            int closest_centroid = 0;
+            for (int j = 0; j < k; j++) {
+                float distance = 0;
+                for (int d = 0; d < target_dim; d++) {
+                    float diff = vectors[i].values[d] - centroids[j][d];
+                    distance += diff * diff;
+                }
+                distance = sqrt(distance);
+                if (min_distance < 0 || distance < min_distance) {
+                    min_distance = distance;
+                    closest_centroid = j;
+                }
+            }
+            cluster_assignments[i] = closest_centroid;
+        }
+
+        // Update centroids
+        float **new_centroids = malloc(k * sizeof(float *));
+        int *cluster_sizes = calloc(k, sizeof(int));
+        for (int i = 0; i < k; i++) new_centroids[i] = calloc(target_dim, sizeof(float));
+        for (int i = 0; i < num_vectors; i++) {
+            int cluster = cluster_assignments[i];
+            cluster_sizes[cluster]++;
+            for (int d = 0; d < target_dim; d++) {
+                new_centroids[cluster][d] += vectors[i].values[d];
+            }
+        }
+        total_change = 0;
+        for (int i = 0; i < k; i++) {
+            if (cluster_sizes[i] > 0) {
+                for (int d = 0; d < target_dim; d++) {
+                    new_centroids[i][d] /= cluster_sizes[i];
+                    float diff = new_centroids[i][d] - centroids[i][d];
+                    total_change += diff * diff;
+                }
+            } else {
+                // Reinitialize empty cluster with a random vector
+                int idx = rand() % num_vectors;
+                for (int d = 0; d < target_dim; d++) {
+                    new_centroids[i][d] = vectors[idx].values[d];
+                }
+            }
+        }
+
+        // Copy new centroids to old centroids
+        for (int i = 0; i < k; i++) {
+            for (int d = 0; d < target_dim; d++) {
+                centroids[i][d] = new_centroids[i][d];
+            }
+            free(new_centroids[i]);
+        }
+        free(new_centroids);
+        free(cluster_sizes);
+
+        iterations++;
+    } while (total_change > threshold && iterations < max_iterations);
+
+    printf("K-means converged after %d iterations\n", iterations);
 }
