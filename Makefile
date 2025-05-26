@@ -1,12 +1,13 @@
 CC = gcc
-CFLAGS = -Iinclude -lm -Wall
+CFLAGS = -Iinclude -Wall
+LDFLAGS = -lSDL2 -lSDL2_ttf -lm
 SRC = src/main.c src/file_parser.c
 OUTPUT = kmeans_program
 
 all: $(OUTPUT)
 
 $(OUTPUT): $(SRC)
-	$(CC) $(SRC) $(CFLAGS) -o $(OUTPUT)
+	$(CC) $(SRC) $(CFLAGS) $(LDFLAGS) -o $(OUTPUT)
 
 clean:
 	rm -f $(OUTPUT)
